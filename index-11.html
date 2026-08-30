@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Skin Forge — Minecraft Skin Editor</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root{
+    --grass:#6FA84B;
+    --grass-dark:#4C7A34;
+    --dirt:#6B4423;
+    --dirt-dark:#4A2E17;
+    --stone:#8A8A8A;
+    --parchment:#E8DFC8;
+    --ink:#2B2318;
+    --gold:#D6B84A;
+    --panel:#3A3226;
+    --panel-light:#4C4232;
+    --redstone:#B23A2E;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background: linear-gradient(180deg, #274B7A 0%, #3E6B9E 40%, var(--grass) 40%, var(--grass-dark) 100%);
+    font-family:'VT323', monospace;
+    color:var(--parchment);
+    min-height:100vh;
+    padding:24px 16px 60px;
+  }
+  h1,h2,.pixel{ font-family:'Press Start 2P', monospace; }
+  .wrap{ max-width:1180px; margin:0 auto; }
+  header{ text-align:center; margin-bottom:22px; }
+  header h1{
+    font-size:22px; color:var(--parchment);
+    text-shadow: 3px 3px 0 var(--dirt-dark);
+    letter-spacing:1px;
+    margin:0 0 8px;
+  }
+  header p{ font-size:19px; margin:0; color:#EFE6CE; opacity:.9; }
+
+  .board{
+    display:grid;
+    grid-template-columns: 1fr 340px;
+    gap:18px;
+  }
+  @media (max-width: 880px){ .board{ grid-template-columns: 1fr; } }
+
+  .panel{
+    background: var(--panel);
+    border: 4px solid var(--dirt-dark);
+    box-shadow: inset 0 0 0 4px var(--panel-light), 0 6px 0 rgba(0,0,0,.35);
+    border-radius:2px;
+    padding:16px;
+  }
+  .panel h2{ font-size:13px; margin:0 0 12px; color:var(--gold); }
+
+  .editor-area{ display:flex; flex-direction:column; align-items:center; gap:14px; }
+  #editCanvas{
+    image-rendering: pixelated;
+    background:
+      linear-gradient(45deg,#5b5240 25%,transparent 25%),
+      linear-gradient(-45deg,#5b5240 25%,transparent 25%),
+      linear-gradient(45deg,transparent 75%,#5b5240 75%),
+      linear-gradient(-45deg,transparent 75%,#5b5240 75%);
+    background-size:16px 16px;
+    background-position:0 0,0 8px,8px -8px,-8px 0px;
+    background-color:#726750;
+    border:3px solid var(--dirt-dark);
+    cursor:crosshair;
+    touch-action:none;
+    max-width:100%;
+  }
+  .toolrow{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+  button.tool, .fileBtn{
+    font-family:'VT323',monospace;
+    font-size:18px;
+    background:var(--panel-light);
+    color:var(--parchment);
+    border:2px solid var(--dirt-dark);
+    padding:8px 14px;
+    cursor:pointer;
+    box-shadow: 0 3px 0 var(--dirt-dark);
+  }
+  button.tool:hover, .fileBtn:hover{ background:#5a4f3a; }
+  button.tool:active{ transform:translateY(2px); box-shadow:none; }
+  button.tool.active{ background:var(--grass); color:var(--ink); border-color:var(--grass-dark); }
+
+  .swatches{ display:grid; grid-template-columns: repeat(8, 1fr); gap:6px; margin-bottom:10px; }
+  .swatch{ width:100%; aspect-ratio:1; border:2px solid var(--dirt-dark); cursor:pointer; }
+  .swatch.selected{ outline:3px solid var(--gold); outline-offset:1px; }
+
+  .colorpick{ display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+  .colorpick input[type=color]{ width:44px; height:36px; border:2px solid var(--dirt-dark); background:none; padding:0; cursor:pointer; }
+  #currentColorLabel{ font-size:18px; }
+
+  .previewwrap{ display:flex; gap:14px; justify-content:center; margin-bottom:14px; }
+  canvas.preview{
+    image-rendering:pixelated;
+    background:#22314A;
+    border:2px solid var(--dirt-dark);
+  }
+
+  .actions{ display:flex; flex-direction:column; gap:8px; margin-top:6px; }
+  .actions button, .actions label.fileBtn{
+    font-family:'Press Start 2P',monospace;
+    font-size:11px;
+    text-align:center;
+    padding:12px 10px;
+    background:var(--gold);
+    color:var(--ink);
+    border:2px solid var(--dirt-dark);
+    box-shadow:0 3px 0 var(--dirt-dark);
+    cursor:pointer;
+    display:block;
+  }
+  .actions button:active, .actions label.fileBtn:active{ transform:translateY(2px); box-shadow:none; }
+  .actions .secondary{ background:var(--panel-light); color:var(--parchment); }
+  .actions .danger{ background:var(--redstone); color:var(--parchment); }
+  input[type=file]{ display:none; }
+
+  .zoomrow{ display:flex; align-items:center; gap:10px; justify-content:center; font-size:18px; }
+  .zoomrow input[type=range]{ width:140px; }
+
+  .howto{ font-size:18px; line-height:1.5; }
+  .howto b{ color:var(--gold); }
+  .howto ol{ padding-left:22px; margin:8px 0; }
+
+  footer{ text-align:center; margin-top:26px; font-size:16px; opacity:.85; }
+  .badge{ display:inline-block; background:var(--panel); border:2px solid var(--dirt-dark); padding:2px 8px; font-size:14px; }
+
+  .modrow{
+    display:grid;
+    grid-template-columns: 56px 1fr 1fr auto;
+    gap:10px;
+    align-items:center;
+    background:var(--panel-light);
+    border:2px solid var(--dirt-dark);
+    padding:8px;
+    margin-bottom:8px;
+  }
+  @media (max-width:640px){ .modrow{ grid-template-columns: 40px 1fr; } }
+  .modrow .thumb{
+    width:48px;height:48px;
+    background:
+      linear-gradient(45deg,#5b5240 25%,transparent 25%),
+      linear-gradient(-45deg,#5b5240 25%,transparent 25%),
+      linear-gradient(45deg,transparent 75%,#5b5240 75%),
+      linear-gradient(-45deg,transparent 75%,#5b5240 75%);
+    background-size:12px 12px;
+    background-position:0 0,0 6px,6px -6px,-6px 0px;
+    background-color:#726750;
+    border:1px solid var(--dirt-dark);
+    image-rendering:pixelated;
+    object-fit:contain;
+  }
+  select, .textinput{
+    font-family:'VT323',monospace;
+    font-size:17px;
+    background:var(--panel);
+    color:var(--parchment);
+    border:2px solid var(--dirt-dark);
+    padding:6px 8px;
+    width:100%;
+  }
+  .modrow .rmBtn{
+    font-family:'VT323',monospace;
+    font-size:16px;
+    background:var(--redstone);
+    color:var(--parchment);
+    border:2px solid var(--dirt-dark);
+    padding:6px 10px;
+    cursor:pointer;
+  }
+  .fieldlabel{ font-size:15px; opacity:.85; margin-bottom:3px; display:block; }
+  .field{ margin-bottom:12px; }
+  .packmode{ display:flex; gap:8px; margin-bottom:14px; }
+  .packmode button{ flex:1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>⛏ SKIN FORGE</h1>
+    <p>Pixel-paint a real, importable Minecraft skin — 64×64, no plugins, no compiling.</p>
+  </header>
+
+  <div class="board">
+    <div class="panel editor-area">
+      <h2>SKIN TEMPLATE (64×64)</h2>
+      <canvas id="editCanvas" width="512" height="512"></canvas>
+
+      <div class="zoomrow">
+        <span>Zoom</span>
+        <input type="range" id="zoomSlider" min="4" max="14" value="8">
+        <span id="zoomVal">8×</span>
+      </div>
+
+      <div class="toolrow">
+        <button class="tool active" data-tool="pencil">✏ Pencil</button>
+        <button class="tool" data-tool="eraser">▢ Eraser</button>
+        <button class="tool" data-tool="fill">▦ Fill</button>
+        <button class="tool" data-tool="eyedrop">◎ Eyedrop</button>
+        <button class="tool" id="gridToggle">▤ Grid</button>
+        <button class="tool" id="undoBtn">↺ Undo</button>
+      </div>
+
+      <div class="howto">
+        The template above is the <b>exact pixel layout</b> Minecraft uses for skin files —
+        head, body, arms and legs are all unfolded onto this one square. Bold lines mark each body part;
+        thin lines mark every pixel. Paint directly on it, or upload an existing skin PNG to edit.
+      </div>
+    </div>
+
+    <div>
+      <div class="panel" style="margin-bottom:16px;">
+        <h2>PREVIEW</h2>
+        <div class="previewwrap">
+          <canvas class="preview" id="previewFront" width="128" height="192"></canvas>
+          <canvas class="preview" id="previewBack" width="128" height="192"></canvas>
+        </div>
+
+        <h2>COLORS</h2>
+        <div class="colorpick">
+          <input type="color" id="colorInput" value="#3B2314">
+          <span id="currentColorLabel">#3B2314</span>
+        </div>
+        <div class="swatches" id="swatches"></div>
+      </div>
+
+      <div class="panel">
+        <h2>FILE</h2>
+        <div class="actions">
+          <label class="fileBtn" for="loadFile">📂 UPLOAD SKIN TO EDIT</label>
+          <input type="file" id="loadFile" accept="image/png">
+          <button id="newSteveBtn" class="secondary">🧍 START FROM STEVE</button>
+          <button id="clearBtn" class="danger">🗑 CLEAR CANVAS</button>
+          <button id="downloadBtn">⬇ DOWNLOAD skin.png</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:18px;">
+    <h2 class="pixel">HOW TO GET THIS INTO MINECRAFT</h2>
+    <div class="howto">
+      <b>Java Edition:</b>
+      <ol>
+        <li>Download your skin below — it saves as a real 64×64 <span class="badge">skin.png</span> file.</li>
+        <li>Go to minecraft.net, log in, and open <b>Profile → Skins</b>.</li>
+        <li>Click <b>Browse</b>, select your downloaded file, choose Classic or Slim arms, and hit <b>Upload</b>. It applies next time you join a world.</li>
+      </ol>
+      <b>Bedrock Edition (mobile/console/Win10):</b>
+      <ol>
+        <li>Download the skin file.</li>
+        <li>Open Minecraft → <b>Profile/Skin picker</b> → <b>Import</b> (or "Classic Skin Packs → Create New").</li>
+        <li>Select the PNG from your device's downloads. It's added to your skin wardrobe instantly — no launcher restart needed.</li>
+      </ol>
+      <b>A note on "mods":</b> this tool builds real skin files because those are just PNG images with a fixed layout — no compiling required.
+      Actual game <i>mods</i> (Forge/Fabric) are compiled Java programs tied to a specific Minecraft version, and Bedrock add-ons are
+      structured JSON/JS behavior packs — neither can be safely generated as a one-click browser export. Tell me what kind of mod
+      you're after (a texture/resource pack, a data pack, or a full code mod) and I'll help you build that next, the right way for that format.
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:18px;">
+    <h2 class="pixel">🧱 MOD BUILDER — TEXTURE PACK FROM PNGs</h2>
+    <div class="howto" style="margin-bottom:14px;">
+      Upload your own PNG art to replace vanilla block/item textures. This builds a real, valid
+      <b>resource pack</b> — the one kind of "mod" that's just files, no compiling needed —
+      and it drops straight into Minecraft.
+    </div>
+
+    <div class="packmode">
+      <button class="tool active" id="modeJava" data-mode="java">☕ Java Edition (.zip)</button>
+      <button class="tool" id="modeBedrock" data-mode="bedrock">📱 Bedrock Edition (.mcpack)</button>
+    </div>
+
+    <div class="field">
+      <span class="fieldlabel">Pack name</span>
+      <input class="textinput" id="packName" value="My Texture Pack">
+    </div>
+    <div class="field">
+      <span class="fieldlabel">Description</span>
+      <input class="textinput" id="packDesc" value="Custom textures made in Skin Forge">
+    </div>
+
+    <div id="modRows"></div>
+
+    <div class="toolrow" style="margin:12px 0;">
+      <button class="tool" id="addRowBtn">➕ Add texture to replace</button>
+    </div>
+
+    <div class="actions" style="max-width:340px;">
+      <button id="genPackBtn">⬇ GENERATE &amp; DOWNLOAD PACK</button>
+    </div>
+
+    <div class="howto" style="margin-top:14px;">
+      <b>Install it — Java:</b> put the downloaded .zip straight into your
+      <span class="badge">.minecraft/resourcepacks</span> folder (Options → Resource Packs → Open Pack Folder), then enable it in-game.<br><br>
+      <b>Install it — Bedrock:</b> just tap the downloaded <span class="badge">.mcpack</span> file on your device and Minecraft will import it automatically; enable it under a world's Resource Packs settings.<br><br>
+      Texture size should match the original (most vanilla block/item textures are 16×16 — bigger square sizes like 32×32 or 64×64 also work in Java as long as every custom texture in the pack is scaled consistently). Mojang bumps the pack format number most versions — if Java shows an "incompatible" warning, it'll still offer to load it anyway.
+    </div>
+  </div>
+
+  <footer>Skin Forge — runs entirely in your browser. Nothing you draw or upload leaves your device.</footer>
+</div>
+
+<script>
+(function(){
+  const SIZE = 64;
+  // offscreen true-resolution buffer
+  const buf = document.createElement('canvas');
+  buf.width = SIZE; buf.height = SIZE;
+  const bctx = buf.getContext('2d', { willReadFrequently:true });
+  bctx.imageSmoothingEnabled = false;
+  bctx.clearRect(0,0,SIZE,SIZE);
+
+  const editCanvas = document.getElementById('editCanvas');
+  const ectx = editCanvas.getContext('2d');
+  ectx.imageSmoothingEnabled = false;
+
+  let zoom = 8;
+  let showGrid = true;
+  let tool = 'pencil';
+  let currentColor = '#3B2314';
+  let drawing = false;
+  let history = [];
+
+  function pushHistory(){
+    history.push(bctx.getImageData(0,0,SIZE,SIZE));
+    if(history.length > 40) history.shift();
+  }
+  function undo(){
+    if(history.length){
+      bctx.putImageData(history.pop(),0,0);
+      renderAll();
+    }
+  }
+
+  // ---- regions (modern 64x64 skin UV map): [x,y,w,h] boxes to outline in bold ----
+  const regions = [
+    // head
+    [0,0,32,16],
+    // body/right arm/right leg row
+    [0,16,64,16],
+    // layer2 + left leg/arm row
+    [0,32,64,32]
+  ];
+
+  function resizeEditCanvas(){
+    editCanvas.width = SIZE*zoom;
+    editCanvas.height = SIZE*zoom;
+    ectx.imageSmoothingEnabled = false;
+    renderEdit();
+  }
+
+  function renderEdit(){
+    ectx.clearRect(0,0,editCanvas.width, editCanvas.height);
+    ectx.drawImage(buf, 0,0, SIZE, SIZE, 0,0, SIZE*zoom, SIZE*zoom);
+    if(showGrid){
+      ectx.strokeStyle = 'rgba(0,0,0,0.15)';
+      ectx.lineWidth = 1;
+      for(let i=0;i<=SIZE;i++){
+        ectx.beginPath(); ectx.moveTo(i*zoom+0.5,0); ectx.lineTo(i*zoom+0.5, SIZE*zoom); ectx.stroke();
+        ectx.beginPath(); ectx.moveTo(0,i*zoom+0.5); ectx.lineTo(SIZE*zoom, i*zoom+0.5); ectx.stroke();
+      }
+      ectx.strokeStyle = 'rgba(214,184,74,0.85)';
+      ectx.lineWidth = 2;
+      regions.forEach(([x,y,w,h])=>{
+        ectx.strokeRect(x*zoom, y*zoom, w*zoom, h*zoom);
+      });
+    }
+  }
+
+  // ---- paperdoll preview: copy known UV rects onto a simple front/back figure ----
+  function drawPart(ctx, sx,sy,sw,sh, dx,dy,dw,dh){
+    ctx.drawImage(buf, sx,sy,sw,sh, dx,dy,dw,dh);
+  }
+
+  function renderPreview(){
+    const scale = 4;
+    [['previewFront', false], ['previewBack', true]].forEach(([id, back])=>{
+      const cv = document.getElementById(id);
+      const pctx = cv.getContext('2d');
+      pctx.imageSmoothingEnabled = false;
+      pctx.clearRect(0,0,cv.width,cv.height);
+      const ox = cv.width/2;
+
+      if(!back){
+        // head front
+        drawPart(pctx, 8,8,8,8, ox-4*scale, 0, 8*scale,8*scale);
+        // body front
+        drawPart(pctx, 20,20,8,12, ox-4*scale, 8*scale, 8*scale,12*scale);
+        // right arm front (on viewer's left visually mirrors, keep simple: place both sides)
+        drawPart(pctx, 44,20,4,12, ox-8*scale, 8*scale, 4*scale,12*scale);
+        drawPart(pctx, 36,52,4,12, ox+4*scale, 8*scale, 4*scale,12*scale);
+        // legs front
+        drawPart(pctx, 4,20,4,12, ox-4*scale, 20*scale, 4*scale,12*scale);
+        drawPart(pctx, 20,52,4,12, ox, 20*scale, 4*scale,12*scale);
+        // hat layer (overlay head) if present
+        drawPart(pctx, 40,8,8,8, ox-4*scale, 0, 8*scale,8*scale);
+      } else {
+        drawPart(pctx, 24,8,8,8, ox-4*scale, 0, 8*scale,8*scale);
+        drawPart(pctx, 32,20,8,12, ox-4*scale, 8*scale, 8*scale,12*scale);
+        drawPart(pctx, 52,20,4,12, ox-8*scale, 8*scale, 4*scale,12*scale);
+        drawPart(pctx, 44,52,4,12, ox+4*scale, 8*scale, 4*scale,12*scale);
+        drawPart(pctx, 12,20,4,12, ox-4*scale, 20*scale, 4*scale,12*scale);
+        drawPart(pctx, 28,52,4,12, ox, 20*scale, 4*scale,12*scale);
+      }
+    });
+  }
+
+  function renderAll(){ renderEdit(); renderPreview(); }
+
+  // ---- drawing ----
+  function canvasToBufCoord(evt){
+    const rect = editCanvas.getBoundingClientRect();
+    const scaleX = editCanvas.width / rect.width;
+    const scaleY = editCanvas.height / rect.height;
+    const cx = (evt.clientX - rect.left) * scaleX;
+    const cy = (evt.clientY - rect.top) * scaleY;
+    return [Math.floor(cx/zoom), Math.floor(cy/zoom)];
+  }
+
+  function setPixel(x,y,color){
+    if(x<0||y<0||x>=SIZE||y>=SIZE) return;
+    if(color === null){
+      bctx.clearRect(x,y,1,1);
+    } else {
+      bctx.fillStyle = color;
+      bctx.clearRect(x,y,1,1);
+      bctx.fillRect(x,y,1,1);
+    }
+  }
+
+  function getPixel(x,y){
+    const d = bctx.getImageData(x,y,1,1).data;
+    if(d[3]===0) return null;
+    return '#'+[d[0],d[1],d[2]].map(v=>v.toString(16).padStart(2,'0')).join('');
+  }
+
+  function floodFill(x,y,target,replacement){
+    if(x<0||y<0||x>=SIZE||y>=SIZE) return;
+    if(target === replacement) return;
+    const stack = [[x,y]];
+    const visited = new Set();
+    while(stack.length){
+      const [cx,cy] = stack.pop();
+      const key = cx+','+cy;
+      if(visited.has(key)) continue;
+      if(cx<0||cy<0||cx>=SIZE||cy>=SIZE) continue;
+      const p = getPixel(cx,cy);
+      if(p !== target) continue;
+      visited.add(key);
+      setPixel(cx,cy,replacement);
+      stack.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]);
+    }
+  }
+
+  function handlePaint(evt){
+    const [x,y] = canvasToBufCoord(evt);
+    if(x<0||y<0||x>=SIZE||y>=SIZE) return;
+    if(tool==='pencil') setPixel(x,y,currentColor);
+    else if(tool==='eraser') setPixel(x,y,null);
+    else if(tool==='eyedrop'){
+      const p = getPixel(x,y);
+      if(p){ currentColor = p; document.getElementById('colorInput').value = p; document.getElementById('currentColorLabel').textContent = p.toUpperCase(); }
+    } else if(tool==='fill'){
+      const target = getPixel(x,y);
+      floodFill(x,y,target,currentColor);
+    }
+    renderAll();
+  }
+
+  editCanvas.addEventListener('pointerdown', (e)=>{
+    drawing = true;
+    pushHistory();
+    handlePaint(e);
+  });
+  editCanvas.addEventListener('pointermove', (e)=>{ if(drawing && (tool==='pencil'||tool==='eraser')) handlePaint(e); });
+  window.addEventListener('pointerup', ()=>{ drawing = false; });
+  editCanvas.addEventListener('pointerdown', e=>e.preventDefault());
+
+  // ---- tool buttons ----
+  document.querySelectorAll('button.tool[data-tool]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('button.tool[data-tool]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      tool = btn.dataset.tool;
+    });
+  });
+
+  document.getElementById('gridToggle').addEventListener('click', (e)=>{
+    showGrid = !showGrid;
+    e.target.classList.toggle('active', showGrid);
+    renderEdit();
+  });
+  document.getElementById('gridToggle').classList.add('active');
+
+  document.getElementById('undoBtn').addEventListener('click', undo);
+
+  document.getElementById('zoomSlider').addEventListener('input', (e)=>{
+    zoom = parseInt(e.target.value,10);
+    document.getElementById('zoomVal').textContent = zoom+'×';
+    resizeEditCanvas();
+  });
+
+  // ---- colors ----
+  const colorInput = document.getElementById('colorInput');
+  colorInput.addEventListener('input', (e)=>{
+    currentColor = e.target.value;
+    document.getElementById('currentColorLabel').textContent = currentColor.toUpperCase();
+  });
+
+  const palette = [
+    '#3B2314','#5C3A21','#8B5A2B','#C68642','#E8B37E','#FFDAB3',
+    '#000000','#3A3A3A','#6E6E6E','#A9A9A9','#D6D6D6','#FFFFFF',
+    '#7A1F1F','#B23A2E','#E0563F','#F2A65A','#F2D157','#D4C86A',
+    '#2E5E2E','#4C7A34','#6FA84B','#3E6B9E','#274B7A','#1B2A4A',
+    '#5B3A8E','#8E5AC4','#C48EE0','#5A2E4A','#8E4A6E','#C46E96'
+  ];
+  const swWrap = document.getElementById('swatches');
+  palette.forEach(c=>{
+    const d = document.createElement('div');
+    d.className = 'swatch';
+    d.style.background = c;
+    d.addEventListener('click', ()=>{
+      currentColor = c;
+      colorInput.value = c;
+      document.getElementById('currentColorLabel').textContent = c.toUpperCase();
+      document.querySelectorAll('.swatch').forEach(s=>s.classList.remove('selected'));
+      d.classList.add('selected');
+    });
+    swWrap.appendChild(d);
+  });
+
+  // ---- file actions ----
+  document.getElementById('clearBtn').addEventListener('click', ()=>{
+    pushHistory();
+    bctx.clearRect(0,0,SIZE,SIZE);
+    renderAll();
+  });
+
+  document.getElementById('downloadBtn').addEventListener('click', ()=>{
+    const out = document.createElement('canvas');
+    out.width = SIZE; out.height = SIZE;
+    const octx = out.getContext('2d');
+    octx.imageSmoothingEnabled = false;
+    octx.drawImage(buf,0,0);
+    const link = document.createElement('a');
+    link.download = 'skin.png';
+    link.href = out.toDataURL('image/png');
+    link.click();
+  });
+
+  document.getElementById('loadFile').addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const img = new Image();
+    img.onload = ()=>{
+      pushHistory();
+      bctx.clearRect(0,0,SIZE,SIZE);
+      bctx.imageSmoothingEnabled = false;
+      bctx.drawImage(img,0,0,SIZE,SIZE);
+      renderAll();
+    };
+    img.src = URL.createObjectURL(file);
+  });
+
+  document.getElementById('newSteveBtn').addEventListener('click', ()=>{
+    pushHistory();
+    bctx.clearRect(0,0,SIZE,SIZE);
+    // minimal built-in base so users aren't starting on a blank void
+    function fillRect(x,y,w,h,c){ bctx.fillStyle=c; bctx.fillRect(x,y,w,h); }
+    // skin tone base across head/arms/legs regions, shirt/pants on body/legs
+    const skin = '#E8B37E', hair='#3B2314', shirt='#3E6B9E', pants='#2B3A55', shoe='#3A3A3A';
+    // head
+    fillRect(0,8,32,8,skin); fillRect(8,0,16,8,hair); fillRect(16,0,8,8,skin);
+    // body/arms/legs row
+    fillRect(0,16,64,16,skin);
+    fillRect(20,20,8,12,shirt); fillRect(16,20,4,12,shirt); fillRect(28,20,4,12,shirt);
+    fillRect(44,20,4,12,shirt); fillRect(40,20,4,12,shirt); fillRect(48,20,4,12,shirt);
+    fillRect(4,20,4,12,pants); fillRect(0,20,4,12,pants); fillRect(8,20,4,12,pants);
+    fillRect(4,28,4,4,shoe); fillRect(0,28,4,4,shoe); fillRect(8,28,4,4,shoe);
+    // layer2 row (left arm/leg)
+    fillRect(16,48,32,16,skin);
+    fillRect(20,52,4,12,pants); fillRect(16,52,4,12,pants); fillRect(24,52,4,12,pants);
+    fillRect(20,60,4,4,shoe); fillRect(16,60,4,4,shoe); fillRect(24,60,4,4,shoe);
+    fillRect(36,52,4,12,shirt); fillRect(32,52,4,12,shirt); fillRect(40,52,4,12,shirt);
+    renderAll();
+  });
+
+  resizeEditCanvas();
+  renderAll();
+})();
+</script>
+
+<script>
+(function(){
+  const TARGETS = [
+    {id:'dirt', label:'Dirt (block)', java:'block/dirt', bedrock:'textures/blocks/dirt', bType:'block'},
+    {id:'grass_block_top', label:'Grass Block — Top', java:'block/grass_block_top', bedrock:'textures/blocks/grass_top', bType:'block'},
+    {id:'grass_block_side', label:'Grass Block — Side', java:'block/grass_block_side', bedrock:'textures/blocks/grass_side', bType:'block'},
+    {id:'stone', label:'Stone', java:'block/stone', bedrock:'textures/blocks/stone', bType:'block'},
+    {id:'cobblestone', label:'Cobblestone', java:'block/cobblestone', bedrock:'textures/blocks/cobblestone', bType:'block'},
+    {id:'oak_planks', label:'Oak Planks', java:'block/oak_planks', bedrock:'textures/blocks/planks_oak', bType:'block'},
+    {id:'bricks', label:'Bricks', java:'block/bricks', bedrock:'textures/blocks/brick', bType:'block'},
+    {id:'sand', label:'Sand', java:'block/sand', bedrock:'textures/blocks/sand', bType:'block'},
+    {id:'glass', label:'Glass', java:'block/glass', bedrock:'textures/blocks/glass', bType:'block'},
+    {id:'diamond_ore', label:'Diamond Ore', java:'block/diamond_ore', bedrock:'textures/blocks/diamond_ore', bType:'block'},
+    {id:'crafting_table_top', label:'Crafting Table — Top', java:'block/crafting_table_top', bedrock:'textures/blocks/crafting_table_top', bType:'block'},
+    {id:'diamond_sword', label:'Diamond Sword (item)', java:'item/diamond_sword', bedrock:'textures/items/diamond_sword', bType:'item'},
+    {id:'diamond_pickaxe', label:'Diamond Pickaxe (item)', java:'item/diamond_pickaxe', bedrock:'textures/items/diamond_pickaxe', bType:'item'},
+    {id:'apple', label:'Apple (item)', java:'item/apple', bedrock:'textures/items/apple', bType:'item'},
+    {id:'bow', label:'Bow (item)', java:'item/bow', bedrock:'textures/items/bow_standby', bType:'item'},
+    {id:'totem_of_undying', label:'Totem of Undying (item)', java:'item/totem_of_undying', bedrock:'textures/items/totem', bType:'item'},
+    {id:'netherite_sword', label:'Netherite Sword (item)', java:'item/netherite_sword', bedrock:'textures/items/netherite_sword', bType:'item'}
+  ];
+
+  let mode = 'java';
+  let rows = []; // {rowEl, target, file, dataURL}
+  let rowSeq = 0;
+
+  document.getElementById('modeJava').addEventListener('click', ()=>setMode('java'));
+  document.getElementById('modeBedrock').addEventListener('click', ()=>setMode('bedrock'));
+  function setMode(m){
+    mode = m;
+    document.getElementById('modeJava').classList.toggle('active', m==='java');
+    document.getElementById('modeBedrock').classList.toggle('active', m==='bedrock');
+  }
+
+  function uuid(){
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c=>{
+      const r = Math.random()*16|0, v = c==='x'?r:(r&0x3|0x8);
+      return v.toString(16);
+    });
+  }
+
+  function addRow(){
+    const id = 'row'+(rowSeq++);
+    const wrap = document.createElement('div');
+    wrap.className = 'modrow';
+    wrap.dataset.id = id;
+    wrap.innerHTML = `
+      <img class="thumb" id="${id}_thumb" />
+      <div>
+        <select id="${id}_target">
+          ${TARGETS.map(t=>`<option value="${t.id}">${t.label}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <input type="file" accept="image/png" id="${id}_file" class="textinput">
+      </div>
+      <button class="rmBtn" id="${id}_rm">✕</button>
+    `;
+    document.getElementById('modRows').appendChild(wrap);
+
+    const rowData = { id, dataURL:null };
+    rows.push(rowData);
+
+    document.getElementById(id+'_file').addEventListener('change', (e)=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev)=>{
+        rowData.dataURL = ev.target.result;
+        document.getElementById(id+'_thumb').src = rowData.dataURL;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    document.getElementById(id+'_rm').addEventListener('click', ()=>{
+      rows = rows.filter(r=>r.id!==id);
+      wrap.remove();
+    });
+  }
+  document.getElementById('addRowBtn').addEventListener('click', addRow);
+  addRow(); // start with one row
+
+  function dataURLToUint8(dataURL){
+    const base64 = dataURL.split(',')[1];
+    const bin = atob(base64);
+    const arr = new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) arr[i] = bin.charCodeAt(i);
+    return arr;
+  }
+
+  async function generatePack(){
+    const readyRows = rows
+      .map(r=>{
+        const sel = document.getElementById(r.id+'_target');
+        const targetId = sel ? sel.value : null;
+        const target = TARGETS.find(t=>t.id===targetId);
+        return { target, dataURL: r.dataURL };
+      })
+      .filter(r=>r.target && r.dataURL);
+
+    if(readyRows.length===0){
+      alert('Add at least one texture and upload a PNG for it before generating.');
+      return;
+    }
+
+    const zip = new JSZip();
+    const packName = (document.getElementById('packName').value || 'My Texture Pack').trim();
+    const packDesc = (document.getElementById('packDesc').value || 'Custom textures').trim();
+
+    if(mode === 'java'){
+      zip.file('pack.mcmeta', JSON.stringify({
+        pack: { pack_format: 15, description: packDesc }
+      }, null, 2));
+      readyRows.forEach(r=>{
+        zip.file(`assets/minecraft/textures/${r.target.java}.png`, dataURLToUint8(r.dataURL));
+      });
+    } else {
+      const headerUuid = uuid();
+      const moduleUuid = uuid();
+      zip.file('manifest.json', JSON.stringify({
+        format_version: 2,
+        header: {
+          name: packName,
+          description: packDesc,
+          uuid: headerUuid,
+          version: [1,0,0],
+          min_engine_version: [1,16,0]
+        },
+        modules: [{
+          type: 'resources',
+          uuid: moduleUuid,
+          version: [1,0,0]
+        }]
+      }, null, 2));
+
+      const terrainData = {};
+      const itemData = {};
+      readyRows.forEach(r=>{
+        const shortPath = r.target.bedrock.replace(/\.png$/,'');
+        if(r.target.bType === 'block'){
+          terrainData[r.target.id] = { textures: shortPath };
+        } else {
+          itemData[r.target.id] = { textures: shortPath };
+        }
+        zip.file(`${shortPath}.png`, dataURLToUint8(r.dataURL));
+      });
+      if(Object.keys(terrainData).length){
+        zip.file('textures/terrain_texture.json', JSON.stringify({
+          resource_pack_name: packName,
+          texture_name: 'atlas.terrain',
+          padding: 8,
+          num_mip_levels: 4,
+          texture_data: terrainData
+        }, null, 2));
+      }
+      if(Object.keys(itemData).length){
+        zip.file('textures/item_texture.json', JSON.stringify({
+          resource_pack_name: packName,
+          texture_name: 'atlas.items',
+          texture_data: itemData
+        }, null, 2));
+      }
+    }
+
+    const blob = await zip.generateAsync({type:'blob'});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const safeName = packName.replace(/[^a-z0-9\-_]+/gi,'_') || 'texture_pack';
+    link.href = url;
+    link.download = mode==='java' ? `${safeName}.zip` : `${safeName}.mcpack`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  document.getElementById('genPackBtn').addEventListener('click', generatePack);
+})();
+</script>
+</body>
+</html>
